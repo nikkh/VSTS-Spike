@@ -30,69 +30,150 @@ namespace VSTS_Spike
             creds.Storage = new VssClientCredentialStorage();
             VssConnection connection = new VssConnection(new Uri(c_collectionUri), creds);
             v = connection;
+
+            // Dont need this code at the moment.
             GitHttpClient gitClient = connection.GetClient<GitHttpClient>();
             var repo = gitClient.GetRepositoryAsync(c_projectname, c_reponame).Result;
-            // Get ptocess templates
-            ProcessHttpClient processClient = connection.GetClient<ProcessHttpClient>();
-            var processes = processClient.GetProcessesAsync().Result;
-
             
+            //// Get process templates
+            //ProcessHttpClient processClient = connection.GetClient<ProcessHttpClient>();
+            //var processes = processClient.GetProcessesAsync().Result;
 
 
-            // and retrieve the corresponding project client 
+
+
+            // Retrieve a list of projects from the account. (and ask if they should be deleted).  This is to tidy up my test data.
+            Console.WriteLine("Preparing a list of projects you may wish to delete!");
             var projectHttpClient = connection.GetClient<ProjectHttpClient>();
 
-            // then - same as above.. iterate over the project references (with a hard-coded pagination of the first 10 entries only)
-            //foreach (var projectReference in projectHttpClient.GetProjects(top: 10, skip: 0).Result)
-            //{
-            //    // and then get ahold of the actual project
-            //    var teamProject = projectHttpClient.GetProject(projectReference.Id.ToString()).Result;
-            //    var urlForTeamProject = ((ReferenceLink)teamProject.Links.Links["web"]).Href;
-               
-            //    Console.WriteLine("Team Project '{0}' (Id: {1}) at Web Url: '{2}' & API Url: '{3}'",
-            //    teamProject.Name,
-            //    teamProject.Id,
-            //    urlForTeamProject,
-            //    teamProject.Url);
-                
-            //}
+            //then - same as above..iterate over the project references(with a hard-coded pagination of the first 10 entries only)
+            foreach (var projectReference in projectHttpClient.GetProjects(top: 20, skip: 0).Result)
+            {
+                var teamProject = projectHttpClient.GetProject(projectReference.Id.ToString()).Result;
+                //var urlForTeamProject = ((ReferenceLink)teamProject.Links.Links["web"]).Href;
+
+                //Console.WriteLine("Team Project '{0}' (Id: {1}) at Web Url: '{2}' & API Url: '{3}'",
+                //teamProject.Name,
+                //teamProject.Id,
+                //urlForTeamProject,
+                //teamProject.Url);
+                if (teamProject.Description == "This is a dummy project")
+                {
+                    Console.WriteLine("Delete this project {0}? (Y/N) default=No", teamProject.Name);
+                    string s = Console.ReadLine();
+                    if (s == "Y") projectHttpClient.QueueDeleteProject(teamProject.Id);
+                }
+            }
             // return;
-           
+
 
             // Create a new project
+            Console.WriteLine("***************Project Creation ******************");
+            Console.WriteLine("Enter your project name");
+            string p = null;
+            do
+            {
+                p = Console.ReadLine();
+            } while (String.IsNullOrEmpty(p));
+            
+
             projectHttpClient = connection.GetClient<ProjectHttpClient>();
-            string projectName = CreateProject(connection, projectHttpClient);
+            string projectName = CreateProject(connection, projectHttpClient, p);
             var createdProject = projectHttpClient.GetProject(projectName).Result;
 
+            Console.WriteLine("retrieve and delete default iterations from project");
             WorkHttpClient workClient = connection.GetClient<WorkHttpClient>();
             TeamContext tc = new TeamContext(createdProject.Name);
             var iterations = workClient.GetTeamIterationsAsync(tc).Result;
             foreach (var item in iterations)
             {
+                
                 workClient.DeleteTeamIterationAsync(tc, item.Id).SyncResult();
                 Console.WriteLine("Deleting {0}", item.Name);
             }
-            
-
-            
-            var processConfiguration = workClient.GetProcessConfigurationAsync(projectName).Result;
 
             DateTime projectStartDate = new DateTime(2017, 07, 01);
+            int discoveryIterationDays = 30;
+            int breathingSpaceDays = 3;
+            int standardIterationDays = 14;
+            int alphaStandardIterations = 4;
+            int privateBetaStandardIterations = 4;
+            int publicBetaStandardIterations = 6;
+
             DateTime startDate = projectStartDate;
-            DateTime endDate = startDate.AddMonths(1); ;
+            DateTime endDate = startDate.AddDays(discoveryIterationDays);
+
+            // Create a discovery iteration to get hold of a node to use as the re-assignment node when deleting stock iterations.
+            Console.WriteLine("Creating a Discovery Phase from {0} to {1}", startDate, endDate);
             var node = AddIteration(createdProject.Id, "Discovery", startDate, endDate);
             int discoveryNodeId = node.Id;
-            AddIteration(createdProject.Id, "Alpha", startDate, endDate);
-            AddIteration(createdProject.Id, "Inception", startDate, endDate, "Alpha");
-            AddIteration(createdProject.Id, "Beta", startDate, endDate);
+            TeamSettingsIteration tsi = new TeamSettingsIteration();
+            tsi.Id = node.Identifier;
+            var x = workClient.PostTeamIterationAsync(tsi, tc).Result;
 
+            // Delete the standard iterations that come with a new project
             WorkItemTrackingHttpClient workItemTrackingClient = v.GetClient<WorkItemTrackingHttpClient>();
             workItemTrackingClient.DeleteClassificationNodeAsync(createdProject.Id, TreeStructureGroup.Iterations, "Iteration 1", discoveryNodeId).SyncResult();
             workItemTrackingClient.DeleteClassificationNodeAsync(createdProject.Id, TreeStructureGroup.Iterations, "Iteration 2", discoveryNodeId).SyncResult();
             workItemTrackingClient.DeleteClassificationNodeAsync(createdProject.Id, TreeStructureGroup.Iterations, "Iteration 3", discoveryNodeId).SyncResult();
 
-            var teamClient = connection.GetClient<TeamHttpClient>();
+            // Dont really need this at the moment
+            // var processConfiguration = workClient.GetProcessConfigurationAsync(projectName).Result;
+
+            // Add Alpha Phase
+            startDate = endDate.AddDays(breathingSpaceDays);
+            endDate = startDate.AddDays((alphaStandardIterations + 2 * standardIterationDays));
+            Console.WriteLine("Creating an Alpha Phase from {0} to {1}", startDate, endDate);
+            node = AddIteration(createdProject.Id, "Alpha", startDate, endDate);
+            tsi = new TeamSettingsIteration();
+            tsi.Id = node.Identifier;
+            x = workClient.PostTeamIterationAsync(tsi, tc).Result;
+
+            endDate = startDate.AddDays(standardIterationDays);
+            Console.WriteLine("Creating an inception iteration from {0} to {1}", startDate, endDate);
+            AddIteration(createdProject.Id, "Inception", startDate, endDate, "Alpha");
+            tsi = new TeamSettingsIteration();
+            tsi.Id = node.Identifier;
+            x = workClient.PostTeamIterationAsync(tsi, tc).Result;
+
+            for (int i = 0; i < alphaStandardIterations; i++)
+            {
+                startDate = endDate.AddDays(1);
+                endDate = startDate.AddDays(standardIterationDays);
+                Console.WriteLine("Creating a Standard Iteration {0} from {1} to {2}", i+1, startDate, endDate);
+                AddIteration(createdProject.Id, String.Format("Iteration {0}", i+1), startDate, endDate, "Alpha");
+                tsi = new TeamSettingsIteration();
+                tsi.Id = node.Identifier;
+                x = workClient.PostTeamIterationAsync(tsi, tc).Result;
+
+            }
+
+            startDate = endDate.AddDays(1);
+            endDate = startDate.AddDays(standardIterationDays);
+            Console.WriteLine("Creating an conclusion iteration from {0} to {1}", startDate, endDate);
+            AddIteration(createdProject.Id, "Conclusion", startDate, endDate, "Alpha");
+            tsi = new TeamSettingsIteration();
+            tsi.Id = node.Identifier;
+            x = workClient.PostTeamIterationAsync(tsi, tc).Result;
+
+            startDate = endDate.AddDays(breathingSpaceDays);
+            endDate = startDate.AddDays((privateBetaStandardIterations + publicBetaStandardIterations) * standardIterationDays);
+            Console.WriteLine("Creating a Beta Phase from {0} to {1}", startDate, endDate);
+            AddIteration(createdProject.Id, "Beta", startDate, endDate);
+            tsi = new TeamSettingsIteration();
+            tsi.Id = node.Identifier;
+            x = workClient.PostTeamIterationAsync(tsi, tc).Result;
+
+            // test putting the sample project into GiT.
+            // This would actually retrieve the files from the core template project.
+
             
+            gitClient = connection.GetClient<GitHttpClient>();
+            repo = gitClient.GetRepositoryAsync(createdProject.Name, createdProject.Name).Result;
+            GitHelper gh = new GitHelper(connection);
+            var pushes = gh.ListPushesIntoMaster(c_projectname,c_reponame);
+            var push = gh.CreatePush(createdProject.Name, repo.Name);
+            pushes = gh.ListPushesIntoMaster(createdProject.Name, repo.Name);
 
             Console.ReadLine();
             return;
@@ -119,16 +200,16 @@ namespace VSTS_Spike
             return x;
         }
 
-        private static string CreateProject(VssConnection connection, ProjectHttpClient client)
+        private static string CreateProject(VssConnection connection, ProjectHttpClient client, string projectName)
         {
             
             // We can also create new projects, i.e. like this:
             var newTeamProjectToCreate = new TeamProject();
-            var somewhatRandomValueForProjectName = "CultureClubette";
+            //var somewhatRandomValueForProjectName = projectName;
 
             // mandatory information is name,
-            newTeamProjectToCreate.Name = $"Project {somewhatRandomValueForProjectName}";
-
+            //newTeamProjectToCreate.Name = $"Project {somewhatRandomValueForProjectName}";
+            newTeamProjectToCreate.Name = projectName;
             // .. description
             newTeamProjectToCreate.Description = $"This is a dummy project";
 
@@ -146,7 +227,7 @@ namespace VSTS_Spike
         // and which Process Template to use
         "processTemplate", new Dictionary<string, string>()
 {
-{"templateTypeId", "6008e993-7062-40b0-9450-0b699b103615"} // This is the Id for the Agile template, on my TFS server at least.
+{"templateTypeId", "6008e993-7062-40b0-9450-0b699b103615"} // This is the Id for the GDS template, on my TFS server at least.
         }
 }
 };
@@ -172,6 +253,7 @@ namespace VSTS_Spike
             }
 
             // alright - creation is finished, successfully or not
+            Console.WriteLine();
             Console.WriteLine("Project '{0}' creation finished with State '{1}' & Message: '{2}'",
             newTeamProjectToCreate.Name,
             projectCreationOperation.Status,
