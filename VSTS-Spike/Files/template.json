@@ -1,0 +1,57 @@
+{
+    "$schema": "http://schema.management.azure.com/schemas/2014-04-01-preview/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "name": {
+            "defaultValue": "",
+            "type": "String"
+        },
+        "regionId": {
+            "defaultValue": "",
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "type": "Microsoft.DevTestLab/labs",
+            "name": "[parameters('name')]",
+            "apiVersion": "2017-04-26-preview",
+            "location": "[parameters('regionId')]",
+            "properties": {
+                "labStorageType": "Premium"
+            },
+            "resources": [
+                {
+                    "type": "schedules",
+                    "name": "LabVmsShutdown",
+                    "apiVersion": "2017-04-26-preview",
+                    "location": "[parameters('regionId')]",
+                    "properties": {
+                        "status": "Enabled",
+                        "timeZoneId": "GMT Standard Time",
+                        "dailyRecurrence": {
+                            "time": "1900"
+                        },
+                        "taskType": "LabVmsShutdownTask",
+                        "notificationSettings": {
+                            "status": "Disabled",
+                            "timeInMinutes": 15
+                        }
+                    },
+                    "dependsOn": [
+                        "[resourceId('Microsoft.DevTestLab/labs', parameters('name'))]"
+                    ]
+                },
+                {
+                    "type": "virtualNetworks",
+                    "name": "[concat('Dtl', parameters('name'))]",
+                    "apiVersion": "2017-04-26-preview",
+                    "location": "[parameters('regionId')]",
+                    "dependsOn": [
+                        "[resourceId('Microsoft.DevTestLab/labs', parameters('name'))]"
+                    ]
+                }
+            ]
+        }
+    ]
+}

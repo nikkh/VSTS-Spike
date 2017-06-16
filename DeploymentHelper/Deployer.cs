@@ -10,43 +10,40 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System;
 using System.IO;
+using System.Threading.Tasks;
 
-namespace VSTS_Spike
+namespace DeploymentHelper
 {
     /// <summary>
     /// This is a helper class for deploying an Azure Resource Manager template
     /// More info about template deployments can be found here https://go.microsoft.com/fwLink/?LinkID=733371
     /// </summary>
-    class DeploymentHelper
+    public class Deployer
     {
-        string subscriptionId = "your-subscription-id";
-        string clientId = "your-service-principal-clientId";
-        string clientSecret = "your-service-principal-client-secret";
-        string resourceGroupName = "resource-group-name";
-        string deploymentName = "deployment-name";
-        string resourceGroupLocation = "resource-group-location"; // must be specified for creating a new resource group
-        string pathToTemplateFile = "path-to-template.json-on-disk";
-        string pathToParameterFile = "path-to-parameters.json-on-disk";
-        string tenantId = "tenant-id";
+        public DeployerParameters Parameters {get; set;}
 
-        public async void Run()
+        public Deployer(DeployerParameters parameters)
+        {
+            Parameters = parameters;
+        }
+        public async Task Deploy()
         {
             // Try to obtain the service credentials
-            var serviceCreds = await ApplicationTokenProvider.LoginSilentAsync(tenantId, clientId, clientSecret);
+            var serviceCreds = await ApplicationTokenProvider.LoginSilentAsync(Parameters.TenantId, Parameters.ClientId, Parameters.ClientSecret);
 
             // Read the template and parameter file contents
-            JObject templateFileContents = GetJsonFileContents(pathToTemplateFile);
-            JObject parameterFileContents = GetJsonFileContents(pathToParameterFile);
+            JObject templateFileContents = GetJsonFileContents(Parameters.PathToTemplateFile);
+            JObject parameterFileContents = GetJsonFileContents(Parameters.PathToParameterFile);
 
             // Create the resource manager client
             var resourceManagementClient = new ResourceManagementClient(serviceCreds);
-            resourceManagementClient.SubscriptionId = subscriptionId;
+            resourceManagementClient.SubscriptionId = Parameters.SubscriptionId;
 
             // Create or check that resource group exists
-            EnsureResourceGroupExists(resourceManagementClient, resourceGroupName, resourceGroupLocation);
+            EnsureResourceGroupExists(resourceManagementClient, Parameters.ResourceGroupName, Parameters.ResourceGroupLocation);
 
             // Start a deployment
-            DeployTemplate(resourceManagementClient, resourceGroupName, deploymentName, templateFileContents, parameterFileContents);
+            DeployTemplate(resourceManagementClient, Parameters.ResourceGroupName, Parameters.DeploymentName, templateFileContents, parameterFileContents);
         }
 
         /// <summary>
