@@ -177,15 +177,16 @@ namespace VSTS_Spike
             pushes = gh.ListPushesIntoMaster(createdProject.Name, repo.Name);
 
             DeployerParameters parameters = new DeployerParameters();
-            parameters.SubscriptionId = "796b222b-b926-4bd5-a6c6-b7f6041433d7";
+            parameters.SubscriptionId = "";
             parameters.ResourceGroupName = "Xekina-RG";
             parameters.DeploymentName = "Xekina-Lab";
             parameters.ResourceGroupLocation = "North Europe"; // must be specified for creating a new resource group
             parameters.PathToTemplateFile = "./Files/template.json";
             parameters.PathToParameterFile = "./Files/parameters.json";
-            parameters.TenantId = "72f988bf-86f1-41af-91ab-2d7cd011db47";
-            parameters.ClientId = "cc6daf65-1ef5-45ee-8c03-a23b1f8662e3";
-            parameters.ClientSecret = "7v8Y2Q0bpMxRUXufD8p0XGuR2l8uV3un3IZ6vmKYdgQ=";
+            // TODO: Get this from app.settings
+            parameters.TenantId = "";
+            parameters.ClientId = "";
+            parameters.ClientSecret = "";
             Deployer deployer = new Deployer(parameters);
             deployer.Deploy().SyncResult();
             Console.ReadLine();
