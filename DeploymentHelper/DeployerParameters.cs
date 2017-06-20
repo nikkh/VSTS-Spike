@@ -15,6 +15,8 @@ namespace DeploymentHelper
         public string DeploymentName  { get; set; }
         public string ResourceGroupLocation { get; set; }
         public string PathToTemplateFile  { get; set; }
+
+        public string ParameterFileContent { get; set; }
         public string PathToParameterFile { get; set; }
         public string TenantId { get; set; }
 }

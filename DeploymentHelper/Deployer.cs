@@ -10,6 +10,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace DeploymentHelper
@@ -31,9 +32,15 @@ namespace DeploymentHelper
             // Try to obtain the service credentials
             var serviceCreds = await ApplicationTokenProvider.LoginSilentAsync(Parameters.TenantId, Parameters.ClientId, Parameters.ClientSecret);
 
+           
+
             // Read the template and parameter file contents
             JObject templateFileContents = GetJsonFileContents(Parameters.PathToTemplateFile);
-            JObject parameterFileContents = GetJsonFileContents(Parameters.PathToParameterFile);
+            JObject parameterFileContents = GetJsonStringContents(Parameters.ParameterFileContent);
+
+           
+
+            
 
             // Create the resource manager client
             var resourceManagementClient = new ResourceManagementClient(serviceCreds);
@@ -45,6 +52,22 @@ namespace DeploymentHelper
             // Start a deployment
             DeployTemplate(resourceManagementClient, Parameters.ResourceGroupName, Parameters.DeploymentName, templateFileContents, parameterFileContents);
         }
+
+        private JObject GetJsonStringContents(string jsonString)
+        {
+            JObject json = new JObject();
+            using (StringReader file = new StringReader(jsonString.ToString()))
+            {
+                using (JsonTextReader reader = new JsonTextReader(file))
+                {
+                    json = (JObject)JToken.ReadFrom(reader);
+                    return json;
+                }
+            }
+        }
+    
+
+       
 
         /// <summary>
         /// Reads a JSON file from the specified path
@@ -63,6 +86,8 @@ namespace DeploymentHelper
                 }
             }
         }
+
+        
 
         /// <summary>
         /// Ensures that a resource group with the specified name exists. If it does not, will attempt to create one.
